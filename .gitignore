@@ -9,3 +9,5 @@ DerivedDataCache/
 *.sdf
 *.VC.db
 *.VC.opendb
+
+_to_delete/

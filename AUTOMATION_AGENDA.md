@@ -50,7 +50,7 @@ and pushes the updated agenda in the same commit as its results.
 ===============================================================================
 
 ### Story (Phase D — no engine needed; drafts for the user's voice pass)
-[~] Q1  D1 prep: three tonal variants of the story bible's opening + core canon
+[x] Q1  D1 prep: three tonal variants of the story bible's opening + core canon
         (literary-thriller / le Carré-cold / TLOU-intimate), each ~600 words,
         plus 10 voice questions for the user. → Docs/drafts/story_bible_v2/
         NOTE: the user owns D1. These are raw material, not the final.

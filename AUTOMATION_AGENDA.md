@@ -54,7 +54,7 @@ and pushes the updated agenda in the same commit as its results.
         (literary-thriller / le Carré-cold / TLOU-intimate), each ~600 words,
         plus 10 voice questions for the user. → Docs/drafts/story_bible_v2/
         NOTE: the user owns D1. These are raw material, not the final.
-[ ] Q2  D2: the Council eavesdrop scene — full script, 2 alternates for the
+[~] Q2  D2: the Council eavesdrop scene — full script, 2 alternates for the
         key revelation. → Docs/drafts/eavesdrop_scene.md
 [ ] Q3  D3: Darya's earpiece dialogue, all 3 missions, cue-by-cue with trigger
         points from MISSION_SCRIPTS.md. → Docs/drafts/darya_earpiece.md

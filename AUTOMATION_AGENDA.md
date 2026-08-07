@@ -56,7 +56,7 @@ and pushes the updated agenda in the same commit as its results.
         NOTE: the user owns D1. These are raw material, not the final.
 [x] Q2  D2: the Council eavesdrop scene — full script, 2 alternates for the
         key revelation. → Docs/drafts/eavesdrop_scene.md
-[ ] Q3  D3: Darya's earpiece dialogue, all 3 missions, cue-by-cue with trigger
+[~] Q3  D3: Darya's earpiece dialogue, all 3 missions, cue-by-cue with trigger
         points from MISSION_SCRIPTS.md. → Docs/drafts/darya_earpiece.md
 [ ] Q4  D4: Yasaman/Azadi confrontation before the boss — 2 drafts (one where
         she speaks first, one where he does). → Docs/drafts/confrontation.md

@@ -30,19 +30,34 @@ and pushes the updated agenda in the same commit as its results.
 1. FETCH remote README + this agenda (cache-busted: append ?nocache=<epoch>).
    If the previous run's entry in RUN_LOG.md is < 45 min old and its item is
    still marked in-progress, STOP (avoid overlapping runs).
-2. TAKE the top unchecked [ ] item below. Mark it [~] in-progress, commit that
-   mark FIRST (pre-registration), then work.
-3. WORK using the planner/executor split:
+2. CLEAN-STATE CHECK (a crashed run must not deadlock every later run):
+   a. Stale lock: if .git/index.lock exists and is > 15 min old, the git
+      process that made it is dead — delete the lock file and continue.
+   b. Interrupted pre-registration: if the working tree is dirty and the
+      ONLY change is a single queue item flipped [ ]->[~] in this file,
+      AND that item's output paths do not exist, AND RUN_LOG.md has no
+      completed entry for it — recover: `git checkout -- AUTOMATION_AGENDA.md`,
+      note the recovery in this run's RUN_LOG line, and continue.
+   c. ANY other dirty state, or a failed pull: STOP and report. Never
+      stash, reset, or overwrite changes this run did not make.
+   d. Abandoned claim: if the newest COMMITTED [~] is >= 45 min old with no
+      outputs at its named paths and no completed RUN_LOG entry, treat it
+      as abandoned — it becomes this run's item (leave the [~] as is).
+3. TAKE the top unchecked [ ] item below (or the re-claimed item from 2d).
+   Pre-registration is ATOMIC: flip the mark to [~], commit, and push
+   back-to-back BEFORE any other work. If that push fails, revert the mark
+   and STOP with the reason. Never begin work on an unpushed [~].
+4. WORK using the planner/executor split:
    - Judgment (this model): interpreting canon, tone choices, specs, review.
    - Plumbing (delegate to cheap subagents via the Agent tool, model=haiku or
      sonnet): formatting, tables, boilerplate from a tight spec, file assembly.
    - Verify all delegated output before committing (spot-read + schema check).
-4. WRITE outputs to the paths named in the item. Drafts go under Docs/drafts/,
+5. WRITE outputs to the paths named in the item. Drafts go under Docs/drafts/,
    code patches under Patches/ as unified diffs + a NEEDS-PC test plan.
-5. UPDATE this agenda: [~] → [x] (or BLOCKED), append one line to RUN_LOG.md.
-6. COMMIT + PUSH results and agenda together. VERIFY the push by re-fetching
+6. UPDATE this agenda: [~] → [x] (or BLOCKED), append one line to RUN_LOG.md.
+7. COMMIT + PUSH results and agenda together. VERIFY the push by re-fetching
    one changed file and comparing byte-for-byte. Unverified = not published.
-7. SUMMARIZE in 3 sentences: what shipped, what's queued next, what needs the
+8. SUMMARIZE in 3 sentences: what shipped, what's queued next, what needs the
    user. This becomes the push/email notification.
 
 ===============================================================================

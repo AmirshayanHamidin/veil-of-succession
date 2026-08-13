@@ -73,7 +73,7 @@ and pushes the updated agenda in the same commit as its results.
         key revelation. → Docs/drafts/eavesdrop_scene.md
 [x] Q3  D3: Darya's earpiece dialogue, all 3 missions, cue-by-cue with trigger
         points from MISSION_SCRIPTS.md. → Docs/drafts/darya_earpiece.md
-[~] Q4  D4: Yasaman/Azadi confrontation before the boss — 2 drafts (one where
+[x] Q4  D4: Yasaman/Azadi confrontation before the boss — 2 drafts (one where
         she speaks first, one where he does). → Docs/drafts/confrontation.md
 [ ] Q5  D5: ending — "the succession is safe, for now" and what it costs her.
         3 endings: bitter / ambiguous / defiant. → Docs/drafts/endings.md

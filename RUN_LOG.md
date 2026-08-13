@@ -1,5 +1,7 @@
 # RUN_LOG — autonomous sessions (newest first)
 
+2026-08-13 | Q4 [x] | D4: throne-room confrontation, 2 full versions (A he-speaks-first canon expansion / B she-speaks-first alternate) + comparison notes, 3 canon flags for user, NEEDS-PC wiring notes → Docs/drafts/confrontation.md | Proof: all 7 canon exchange lines grep-verified verbatim vs MISSION_SCRIPTS.md; canon files untouched; both versions end on identical Darya button + Activate() trigger | Published? no — session crashed between staging and commit (stale HEAD.lock); published same day by interactive recovery, verified push.
+
 
 2026-08-12 | maintenance (interactive, user-requested) | Deadlock fix: removed 4-day stale .git/index.lock (crashed 2026-08-08 git commit), reverted that crash's uncommitted Q4 [~] pre-registration mark (no outputs existed, no RUN_LOG entry), amended RUN PROTOCOL with CLEAN-STATE CHECK (stale lock removal, interrupted pre-registration recovery, abandoned-claim reclaim, atomic pre-registration) and updated the scheduled-task prompt to match | Proof: git status clean before commit; Q4 back to [ ] | Published? see this commit.
 2026-08-08 | Q3 [x] recovery | Published prior session's staged-but-uncommitted D3 output (Docs/drafts/darya_earpiece.md + agenda [~]→[x]); re-verified 5 canon lines verbatim vs MISSION_SCRIPTS.md before commit; corrected 2026-08-07 log entry's publish claim | Proof: HEAD == origin/main after push | Published? yes (verified push).

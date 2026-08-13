@@ -31,16 +31,30 @@ and pushes the updated agenda in the same commit as its results.
    If the previous run's entry in RUN_LOG.md is < 45 min old and its item is
    still marked in-progress, STOP (avoid overlapping runs).
 2. CLEAN-STATE CHECK (a crashed run must not deadlock every later run):
-   a. Stale lock: if .git/index.lock exists and is > 15 min old, the git
-      process that made it is dead — delete the lock file and continue.
+   a. Stale locks: if ANY *.lock file under .git/ (index.lock, HEAD.lock,
+      objects/maintenance.lock, ref locks) is > 15 min old, the git process
+      that made it is dead — delete it and continue. SANDBOX NOTE: `rm` in
+      the mounted repo fails with "Operation not permitted" until deletion
+      is enabled; call the `mcp__cowork__allow_cowork_file_delete` tool
+      (load via ToolSearch) with the lock's VM path, then retry `rm`. If
+      deletion still fails, STOP and report the exact error.
    b. Interrupted pre-registration: if the working tree is dirty and the
       ONLY change is a single queue item flipped [ ]->[~] in this file,
       AND that item's output paths do not exist, AND RUN_LOG.md has no
       completed entry for it — recover: `git checkout -- AUTOMATION_AGENDA.md`,
       note the recovery in this run's RUN_LOG line, and continue.
-   c. ANY other dirty state, or a failed pull: STOP and report. Never
+   c. Interrupted completion (a crashed run's FINISHED work — publish it,
+      don't stop): if the dirty/staged changes consist ONLY of (i) new or
+      modified files at the output paths named by the current [~] (or just-
+      flipped [x]) queue item, (ii) that item's mark in this file, and
+      (iii) a RUN_LOG.md entry for that item — this is automation output,
+      NOT the user's work in progress. Spot-verify the outputs against
+      canon, correct the RUN_LOG entry's publish claim if it is premature,
+      then commit and push as a recovery. That recovery consumes this
+      run's one item: STOP after the verified push and summarize.
+   d. ANY other dirty state, or a failed pull: STOP and report. Never
       stash, reset, or overwrite changes this run did not make.
-   d. Abandoned claim: if the newest COMMITTED [~] is >= 45 min old with no
+   e. Abandoned claim: if the newest COMMITTED [~] is >= 45 min old with no
       outputs at its named paths and no completed RUN_LOG entry, treat it
       as abandoned — it becomes this run's item (leave the [~] as is).
 3. TAKE the top unchecked [ ] item below (or the re-claimed item from 2d).

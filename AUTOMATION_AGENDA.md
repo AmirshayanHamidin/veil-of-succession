@@ -89,7 +89,7 @@ and pushes the updated agenda in the same commit as its results.
         points from MISSION_SCRIPTS.md. → Docs/drafts/darya_earpiece.md
 [x] Q4  D4: Yasaman/Azadi confrontation before the boss — 2 drafts (one where
         she speaks first, one where he does). → Docs/drafts/confrontation.md
-[~] Q5  D5: ending — "the succession is safe, for now" and what it costs her.
+[x] Q5  D5: ending — "the succession is safe, for now" and what it costs her.
         3 endings: bitter / ambiguous / defiant. → Docs/drafts/endings.md
 [ ] Q6  D6: father/daughter beats woven across missions 1-3, mapped to
         existing checkpoints. → Docs/drafts/father_daughter_beats.md

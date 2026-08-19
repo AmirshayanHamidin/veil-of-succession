@@ -95,7 +95,7 @@ and pushes the updated agenda in the same commit as its results.
         existing checkpoints. → Docs/drafts/father_daughter_beats.md
 
 ### Code drafts (NEEDS-PC: build + screenshot verification in a live session)
-[ ] Q7  D7 spec + patch: subtitle/dialogue-line system in MissionSubsystem
+[~] Q7  D7 spec + patch: subtitle/dialogue-line system in MissionSubsystem
         (data table of cues, on-screen text w/ timing). → Patches/subtitles.diff
 [ ] Q8  E1 patch: USaveGame save/load (mission, weapons, health) + test plan.
         → Patches/savegame.diff

@@ -91,7 +91,7 @@ and pushes the updated agenda in the same commit as its results.
         she speaks first, one where he does). → Docs/drafts/confrontation.md
 [x] Q5  D5: ending — "the succession is safe, for now" and what it costs her.
         3 endings: bitter / ambiguous / defiant. → Docs/drafts/endings.md
-[ ] Q6  D6: father/daughter beats woven across missions 1-3, mapped to
+[~] Q6  D6: father/daughter beats woven across missions 1-3, mapped to
         existing checkpoints. → Docs/drafts/father_daughter_beats.md
 
 ### Code drafts (NEEDS-PC: build + screenshot verification in a live session)

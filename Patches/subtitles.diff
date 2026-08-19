@@ -1,0 +1,1283 @@
+D7 - SUBTITLE / DIALOGUE-LINE SYSTEM (DRAFT PATCH, NOT BUILT, NOT VERIFIED)
+Veil of Succession - queue item Q7 of AUTOMATION_AGENDA.md
+
+This file is a unified diff against main. Everything above the first
+"diff --git" line is a comment and is ignored by git apply.
+
+  APPLY:   git apply Patches/subtitles.diff
+  UNDO:    git apply -R Patches/subtitles.diff
+
+Companion: Patches/subtitles_TESTPLAN.md - what to build, what to look at,
+and every open question. NOTHING HERE HAS BEEN COMPILED OR SEEN RUNNING.
+This was written headlessly with no engine, so treat it as a proposal.
+
+WHAT IT DOES
+  UMissionSubsystem gains a one-channel dialogue system: a cue library, a
+  priority/interrupt model, repeat rules (once / re-arm / bank), multi-line
+  chains, and an active-line clock driven by FTickableGameObject.
+  AVeilHUD renders the active line as a wrapped, faded, speaker-coloured
+  subtitle block at the bottom centre of the screen.
+
+FILES
+  NEW  Source/VeilOfSuccession/VeilDialogue.h    cue types + tuning constants
+  NEW  Source/VeilOfSuccession/VeilDialogue.cpp  the 84-line built-in registry
+  NEW  Content/Data/VeilDialogueCues.csv         same 84 lines, importable as
+                                                 a UDataTable (row struct:
+                                                 FVeilDialogueCue)
+  MOD  Source/VeilOfSuccession/MissionSubsystem.h/.cpp   the channel
+  MOD  Source/VeilOfSuccession/VeilHUD.h/.cpp            the rendering
+
+CANON
+  All 84 lines are the canon text of Docs/MISSION_SCRIPTS.md as organised in
+  Docs/drafts/darya_earpiece.md. They were script-checked verbatim against
+  those two files (0 mismatches) after folding typographic punctuation to
+  ASCII, which the rest of this codebase uses. No canon file was modified.
+
+diff --git a/Content/Data/VeilDialogueCues.csv b/Content/Data/VeilDialogueCues.csv
+new file mode 100644
+index 0000000..dfb1f5c
+--- /dev/null
++++ b/Content/Data/VeilDialogueCues.csv
+@@ -0,0 +1,85 @@
++Name,CueId,Speaker,Line,Priority,Repeat,BankId,NextCueId,CooldownSeconds,DurationOverride
++Cue_M0_CO_1,M0_CO_1,Darya,"You're on the wall's blind side. Cameras sweep left to right, thirty-second cycle. There's a reception breaking up in the east garden - stay to its edge and you're just another guest who's had too much tea.",P0_Scripted,Once,,M0_CO_2,0.0,0.0
++Cue_M0_CO_2,M0_CO_2,Yas,"And if someone asks whose guest I am?",P0_Scripted,Once,,M0_CO_3,0.0,0.0
++Cue_M0_CO_3,M0_CO_3,Darya,"You're Custodian Rahimi's daughter. Nobody asks the Rahimi girl anything. That's the whole plan.",P0_Scripted,Once,,M0_CO_4,0.0,0.0
++Cue_M0_CO_4,M0_CO_4,Yas,"Comforting.",P0_Scripted,Once,,M0_CO_5,0.0,0.0
++Cue_M0_CO_5,M0_CO_5,Darya,"It's not meant to be. Get to the palace doors before the Council rises. Your father is in that room, Yas. Move like you belong and no one will look twice.",P0_Scripted,Once,,,0.0,0.0
++Cue_M0_EG_START,M0_EG_START,Darya,"Over you go. Keep low along the hedge line - the spotlights don't reach the roses.",P1_Objective,Once,,,0.0,0.0
++Cue_M0_EG_SPOT,M0_EG_SPOT,Darya,"Light incoming, right to left. Behind the fountain. Wait for it to pass.",P2_Conditional,Once,,,0.0,0.0
++Cue_M0_EG_GUESTS,M0_EG_GUESTS,Darya,"Those are guests, not guards. Don't dart them, don't spook them. A screaming undersecretary is worse than any alarm.",P2_Conditional,ReArm,,,30.0,0.0
++Cue_M0_EG_SPRINT,M0_EG_SPRINT,Darya,"Slow down. A guest strolls. Only the guilty run.",P2_Conditional,ReArm,,,20.0,0.0
++Cue_M0_EG_DONE,M0_EG_DONE,Darya,"Good. You're inside the garden proper now. That's the last easy part of the night.",P1_Objective,Once,,,0.0,0.0
++Cue_M0_KC_START,M0_KC_START,Darya,"See the captain by the cypress? Omid Shirazi. Palace guard, off the clock, sneaking a cigarette he swore to his wife he'd quit. His card opens the inner doors.",P1_Objective,Once,,M0_KC_START_2,0.0,0.0
++Cue_M0_KC_START_2,M0_KC_START_2,Yas,"You want me to ask him nicely.",P1_Objective,Once,,M0_KC_START_3,0.0,0.0
++Cue_M0_KC_START_3,M0_KC_START_3,Darya,"I want you to take it off him without him ever knowing it's gone. Come up behind while he's still. Ease - don't grab.",P1_Objective,Once,,,0.0,0.0
++Cue_M0_KC_TURN,M0_KC_TURN,Darya,"He's turning - break off, break off. Be a woman admiring the roses.",P2_Conditional,ReArm,,,10.0,0.0
++Cue_M0_KC_STALL,M0_KC_STALL,Darya,"He finishes that cigarette in ninety seconds and walks. Behind him, close, patient.",P2_Conditional,Once,,,0.0,0.0
++Cue_M0_KC_DONE,M0_KC_DONE,Yas,"Sorry, Captain. Give my regards to your wife.",P1_Objective,Once,,M0_KC_DONE_2,0.0,0.0
++Cue_M0_KC_DONE_2,M0_KC_DONE_2,Darya,"Clean. He'll pat his pocket at the gate and blame the tailor. Card's live - get to the doors.",P1_Objective,Once,,,0.0,0.0
++Cue_M0_EP_START,M0_EP_START,Darya,"Main doors, top of the steps. There's an overwatch on the colonnade roof - stay under the arches and he never sees you.",P1_Objective,Once,,,0.0,0.0
++Cue_M0_EP_OVERWATCH,M0_EP_OVERWATCH,Darya,"Rooftop spotter, eleven o'clock. He calls, he doesn't chase. Don't give him a reason to call.",P2_Conditional,ReArm,,,30.0,0.0
++Cue_M0_EP_HEAT,M0_EP_HEAT,Darya,"They're getting curious. Ease off, let it cool. We are not caught until we're caught.",P2_Conditional,ReArm,,,30.0,0.0
++Cue_M0_EP_DONE,M0_EP_DONE,Darya,"Card's good. The doors are open.",P1_Objective,Once,,M0_EP_DONE_2,0.0,0.0
++Cue_M0_EP_DONE_2,M0_EP_DONE_2,Yas,"Then I'm in the room with my father and the man trying to bury him.",P1_Objective,Once,,M0_EP_DONE_3,0.0,0.0
++Cue_M0_EP_DONE_3,M0_EP_DONE_3,Darya,"One at a time, Yas. Listen first. Fight never.",P1_Objective,Once,,,0.0,0.0
++Cue_M1_EV_START,M1_EV_START,Darya,"The chamber's through the columns. You can't go in - but there's a service alcove where the ventilation carries every word. Plant your probe, stay in the zone, let it fill. Guards pass on a rotation; move between the two alcoves when they do.",P1_Objective,Once,,M1_EV_START_2,0.0,0.0
++Cue_M1_EV_START_2,M1_EV_START_2,Yas,"How long?",P1_Objective,Once,,M1_EV_START_3,0.0,0.0
++Cue_M1_EV_START_3,M1_EV_START_3,Darya,"Long enough to hear something worth your neck. Stay in the sound.",P1_Objective,Once,,,0.0,0.0
++Cue_M1_EV_ROT,M1_EV_ROT,Darya,"Rotation. Slide to the far alcove - the sound carries there too.",P2_Conditional,ReArm,,,15.0,0.0
++Cue_M1_EV_PROBE,M1_EV_PROBE,Darya,"Your probe's showing. Tuck it, or a guard will find it before you find your answer.",P2_Conditional,ReArm,,,20.0,0.0
++Cue_M1_EV_LEAVE,M1_EV_LEAVE,Darya,"You're out of the sound. Back in the alcove - every word we miss, we miss forever.",P2_Conditional,ReArm,,,15.0,0.0
++Cue_M1_EV_DONE,M1_EV_DONE,Yas,"He's blackmailing the whole Council. And my father just dared him to do it.",P1_Objective,Once,,M1_EV_DONE_2,0.0,0.0
++Cue_M1_EV_DONE_2,M1_EV_DONE_2,Darya,"Then the files are real, and they're here. That ""inventory"" is the succession dossier, Yas. If we take it, we take his whole plan out of the drawer with it.",P1_Objective,Once,,M1_EV_DONE_3,0.0,0.0
++Cue_M1_EV_DONE_3,M1_EV_DONE_3,Yas,"Where.",P1_Objective,Once,,M1_EV_DONE_4,0.0,0.0
++Cue_M1_EV_DONE_4,M1_EV_DONE_4,Darya,"The chamber empties in seconds. He wouldn't carry it out through a hall full of Custodians. It's still in that room. Go - before the guards reset.",P1_Objective,Once,,,0.0,0.0
++Cue_M1_SD_START,M1_SD_START,Darya,"They've adjourned. You've got a narrow window before the room's locked for the night. The dossier - a leather case, he wouldn't trust a screen with it.",P1_Objective,Once,,,0.0,0.0
++Cue_M1_SD_SWEEP,M1_SD_SWEEP,Darya,"Recess detail's coming back to sweep the room. In and out, Yas.",P2_Conditional,Once,,,0.0,0.0
++Cue_M1_SD_HINT,M1_SD_HINT,Darya,"Check the head of the table. A man like Azadi keeps his knife where his hand rests.",P2_Conditional,Once,,,0.0,0.0
++Cue_M1_SD_DONE,M1_SD_DONE,Yas,"I have it. Every name. Every debt he thinks he owns.",P1_Objective,Once,,M1_SD_DONE_2,0.0,0.0
++Cue_M1_SD_DONE_2,M1_SD_DONE_2,Darya,"That's the ballgame. Now we walk it out quietly and none of this was ever -",P1_Objective,Once,,M1_SD_DONE_3,0.0,0.0
++Cue_M1_SD_DONE_3,M1_SD_DONE_3,Darya,"...Yas. Someone's coming back for it.",P1_Objective,Once,,,0.0,0.0
++Cue_M1_TR_START,M1_TR_START,Darya,"Don't go back the way you came, the hall's filling. Through the far doors - the throne room, then out the garden side.",P1_Objective,Once,,M1_TR_START_2,0.0,0.0
++Cue_M1_TR_START_2,M1_TR_START_2,Yas,"The throne room's a dead end, Darya.",P1_Objective,Once,,M1_TR_START_3,0.0,0.0
++Cue_M1_TR_START_3,M1_TR_START_3,Darya,"It's a door. All rooms are doors if you're brave enough. Move.",P1_Objective,Once,,,0.0,0.0
++Cue_M1_TR_MID,M1_TR_MID,Darya,"He'll know the case is gone the second he reaches for it. Speed now, quiet second.",P2_Conditional,Once,,,0.0,0.0
++Cue_M1_TR_COVER,M1_TR_COVER,Darya,"Yas - he won't let you walk. Cover, and make him work for it.",P0_Scripted,Once,,,0.0,0.0
++Cue_M2_BOSS_P2,M2_BOSS_P2,Darya,"He's brought friends. Thin them out and keep off his line - he telegraphs before every volley.",P1_Objective,Once,,,0.0,0.0
++Cue_M2_BOSS_HEART,M2_BOSS_HEART,Darya,"Heartbeat's up, Yas. Breathe. He's slower than his own pride.",P2_Conditional,Bank,M2_BOSS_HEART,,25.0,0.0
++Cue_M2_BOSS_HEART2,M2_BOSS_HEART2,Darya,"Cover. Let your heart slow before you trade with him again.",P2_Conditional,Bank,M2_BOSS_HEART,,25.0,0.0
++Cue_M2_BOSS_DONE,M2_BOSS_DONE,Darya,"He'll be out ninety seconds, no more. Don't stay to argue with a sleeping man. Garden side, extraction at the gate. Go.",P1_Objective,Once,,,0.0,0.0
++Cue_M2_ESC_START,M2_ESC_START,Darya,"Back through the roses, the way you came. The garden's a different animal now - they'll have heard the noise.",P1_Objective,Once,,,0.0,0.0
++Cue_M2_ESC_ALERT,M2_ESC_ALERT,Darya,"They know something happened in the palace, they just don't know it's you yet. Keep it that way.",P2_Conditional,Once,,,0.0,0.0
++Cue_M2_ESC_MID,M2_ESC_MID,Darya,"Case first, glory never. If it comes to it, you drop me before you drop that dossier.",P2_Conditional,Once,,M2_ESC_MID_2,0.0,0.0
++Cue_M2_ESC_MID_2,M2_ESC_MID_2,Yas,"I'd never drop you, Darya.",P2_Conditional,Once,,M2_ESC_MID_3,0.0,0.0
++Cue_M2_ESC_MID_3,M2_ESC_MID_3,Darya,"...Just get to the gate, you sentimental idiot.",P2_Conditional,Once,,,0.0,0.0
++Cue_M2_ESC_SPOT,M2_ESC_SPOT,Darya,"Spotlight - move, move, the fountains, like we practiced.",P2_Conditional,ReArm,,,20.0,0.0
++Cue_M2_ESC_DONE,M2_ESC_DONE,Darya,"Car's running. Case in the back. - You did it, Yas.",P1_Objective,Once,,M2_ESC_DONE_2,0.0,0.0
++Cue_M2_ESC_DONE_2,M2_ESC_DONE_2,Yas,"Did I? He was awake enough to smile.",P1_Objective,Once,,,0.0,0.0
++Cue_M2_CLOSE,M2_CLOSE,Darya,"Get some sleep, Yas. The succession is safe.",P0_Scripted,Once,,,0.0,0.0
++Cue_M0_RETRY_01,M0_RETRY_01,Darya,"Still with me? Good. The wall hasn't moved and neither has the plan.",P1_Objective,Bank,M0_RETRY,,0.0,0.0
++Cue_M0_RETRY_02,M0_RETRY_02,Darya,"From the top, Yas. The roses will keep our secret.",P1_Objective,Bank,M0_RETRY,,0.0,0.0
++Cue_M1_RETRY_01,M1_RETRY_01,Darya,"Back in the hall. They're jumpy now - give them nothing to be jumpy about.",P1_Objective,Bank,M1_RETRY,,0.0,0.0
++Cue_M1_RETRY_02,M1_RETRY_02,Darya,"Again, and quieter. The night's still ours to lose.",P1_Objective,Bank,M1_RETRY,,0.0,0.0
++Cue_M2_RETRY_01,M2_RETRY_01,Darya,"On your feet. The case is ours until it isn't.",P1_Objective,Bank,M2_RETRY,,0.0,0.0
++Cue_M2_RETRY_02,M2_RETRY_02,Darya,"The gate's still there, Yas. So are you. Move.",P1_Objective,Bank,M2_RETRY,,0.0,0.0
++Cue_RX_DET_UP_01,RX_DET_UP_01,Darya,"They're curious, not certain. Sink back.",P4_Reactive,Bank,RX_DET_UP,,12.0,0.0
++Cue_RX_DET_UP_02,RX_DET_UP_02,Darya,"Someone thinks they saw a ghost. Prove them right about the ghost part - vanish.",P4_Reactive,Bank,RX_DET_UP,,12.0,0.0
++Cue_RX_DET_UP_03,RX_DET_UP_03,Darya,"Ease off, Yas. We cool this before it climbs.",P4_Reactive,Bank,RX_DET_UP,,12.0,0.0
++Cue_RX_DET_UP_04,RX_DET_UP_04,Darya,"Not caught. Curious. There's a whole world between those two words. Live in it.",P4_Reactive,Bank,RX_DET_UP,,12.0,0.0
++Cue_RX_DET_RED_01,RX_DET_RED_01,Darya,"That's your heartbeat you're feeling. Slow it. Break their line and it fades.",P4_Reactive,Bank,RX_DET_RED,,12.0,0.0
++Cue_RX_DET_RED_02,RX_DET_RED_02,Darya,"One more set of eyes and it's over - and your father with it. Get gone.",P4_Reactive,Bank,RX_DET_RED,,12.0,0.0
++Cue_RX_DET_RED_03,RX_DET_RED_03,Darya,"Red, Yas. Move like it.",P4_Reactive,Bank,RX_DET_RED,,12.0,0.0
++Cue_RX_DET_COOL_01,RX_DET_COOL_01,Darya,"There. It's passing. Breathe out.",P4_Reactive,Bank,RX_DET_COOL,,12.0,0.0
++Cue_RX_DET_COOL_02,RX_DET_COOL_02,Darya,"They've talked themselves out of it. Men always do.",P4_Reactive,Bank,RX_DET_COOL,,12.0,0.0
++Cue_RX_DET_COOL_03,RX_DET_COOL_03,Darya,"Back to a ghost. Good.",P4_Reactive,Bank,RX_DET_COOL,,12.0,0.0
++Cue_RX_KILL_01,RX_KILL_01,Darya,"...He's not getting up, Yas. That's a body now, and bodies get found.",P4_Reactive,Bank,RX_KILL,,15.0,0.0
++Cue_RX_KILL_02,RX_KILL_02,Darya,"Hide him. A sleeping man is a shift change; a dead one is an investigation.",P4_Reactive,Bank,RX_KILL,,15.0,0.0
++Cue_RX_KILL_03,RX_KILL_03,Darya,"I won't lecture you. But the morning will.",P4_Reactive,Bank,RX_KILL,,15.0,0.0
++Cue_RX_DART_01,RX_DART_01,Darya,"Down and dreaming. Tidy.",P4_Reactive,Bank,RX_DART,,15.0,0.0
++Cue_RX_DART_02,RX_DART_02,Darya,"Nine minutes of nap. Use them.",P4_Reactive,Bank,RX_DART,,15.0,0.0
++Cue_RX_DART_03,RX_DART_03,Darya,"Cleaner. Move him out of the light.",P4_Reactive,Bank,RX_DART,,15.0,0.0
++Cue_RX_STALL_01,RX_STALL_01,Darya,"The Council doesn't wait, and neither does the night.",P3_Hint,Bank,RX_STALL,,30.0,0.0
++Cue_RX_STALL_02,RX_STALL_02,Darya,"Whatever you're admiring, admire it faster.",P3_Hint,Bank,RX_STALL,,30.0,0.0
++Cue_RX_STALL_03,RX_STALL_03,Darya,"Clock, Yas.",P3_Hint,Bank,RX_STALL,,30.0,0.0
++Cue_RX_INTEL_01,RX_INTEL_01,Darya,"Keep that. Every scrap is a vote we'll need later.",P4_Reactive,Bank,RX_INTEL,,15.0,0.0
++Cue_RX_INTEL_02,RX_INTEL_02,Darya,"Photograph it, don't pocket it - a missing paper is a question, a copied one isn't.",P4_Reactive,Bank,RX_INTEL,,15.0,0.0
+diff --git a/Source/VeilOfSuccession/MissionSubsystem.cpp b/Source/VeilOfSuccession/MissionSubsystem.cpp
+index 30b68a8..e94b130 100644
+--- a/Source/VeilOfSuccession/MissionSubsystem.cpp
++++ b/Source/VeilOfSuccession/MissionSubsystem.cpp
+@@ -1,5 +1,6 @@
+ // Veil of Succession - fictional political thriller. All characters fictitious.
+ #include "MissionSubsystem.h"
++#include "Engine/DataTable.h"
+ 
+ DEFINE_LOG_CATEGORY_STATIC(LogVeil, Log, All);
+ 
+@@ -14,33 +15,49 @@ void UMissionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+ 	// M0 "The Wall of Roses"
+ 	const FText M0 = LOCTEXT("M0Title", "The Wall of Roses");
+ 	Objectives.Add(FVeilObjective(TEXT("Obj_EnterGrounds"), 0, M0,
+-		LOCTEXT("Obj_EnterGrounds", "Slip past the gate into the rose-garden courtyard.")));
++		LOCTEXT("Obj_EnterGrounds", "Slip past the gate into the rose-garden courtyard."),
++		TEXT("M0_EG_START"), TEXT("M0_EG_DONE")));
+ 	Objectives.Add(FVeilObjective(TEXT("Obj_Keycard"), 0, M0,
+-		LOCTEXT("Obj_Keycard", "Lift a security keycard from the courtyard patrol.")));
++		LOCTEXT("Obj_Keycard", "Lift a security keycard from the courtyard patrol."),
++		TEXT("M0_KC_START"), TEXT("M0_KC_DONE")));
+ 	Objectives.Add(FVeilObjective(TEXT("Obj_EnterPalace"), 0, M0,
+-		LOCTEXT("Obj_EnterPalace", "Use the keycard to enter the palace.")));
++		LOCTEXT("Obj_EnterPalace", "Use the keycard to enter the palace."),
++		TEXT("M0_EP_START"), TEXT("M0_EP_DONE")));
+ 
+ 	// M1 "The Custodians Convene"
+ 	const FText M1 = LOCTEXT("M1Title", "The Custodians Convene");
+ 	Objectives.Add(FVeilObjective(TEXT("Obj_Eavesdrop"), 1, M1,
+-		LOCTEXT("Obj_Eavesdrop", "Eavesdrop on the meeting chamber (stay hidden, listen 20s).")));
++		LOCTEXT("Obj_Eavesdrop", "Eavesdrop on the meeting chamber (stay hidden, listen 20s)."),
++		TEXT("M1_EV_START"), TEXT("M1_EV_DONE")));
+ 	Objectives.Add(FVeilObjective(TEXT("Obj_StealDossier"), 1, M1,
+-		LOCTEXT("Obj_StealDossier", "Steal the succession dossier from the chamber.")));
++		LOCTEXT("Obj_StealDossier", "Steal the succession dossier from the chamber."),
++		TEXT("M1_SD_START"), TEXT("M1_SD_DONE")));
+ 	Objectives.Add(FVeilObjective(TEXT("Obj_ReachThroneRoom"), 1, M1,
+-		LOCTEXT("Obj_ReachThroneRoom", "Reach the Peacock Throne room.")));
++		LOCTEXT("Obj_ReachThroneRoom", "Reach the Peacock Throne room."),
++		TEXT("M1_TR_START"), NAME_None));
+ 
+ 	// M2 "The Peacock Throne"
+ 	const FText M2 = LOCTEXT("M2Title", "The Peacock Throne");
+ 	Objectives.Add(FVeilObjective(TEXT("Obj_DefeatAzadi"), 2, M2,
+-		LOCTEXT("Obj_DefeatAzadi", "Subdue General Farrokh Azadi.")));
++		LOCTEXT("Obj_DefeatAzadi", "Subdue General Farrokh Azadi."),
++		NAME_None, TEXT("M2_BOSS_DONE")));
+ 	Objectives.Add(FVeilObjective(TEXT("Obj_Escape"), 2, M2,
+-		LOCTEXT("Obj_Escape", "Escape to the extraction point at the gate.")));
++		LOCTEXT("Obj_Escape", "Escape to the extraction point at the gate."),
++		TEXT("M2_ESC_START"), TEXT("M2_ESC_DONE")));
+ 
+ 	CurrentIndex = 0;
+ 	bCampaignComplete = false;
+ 	bPlayerDead = false;
+ 
+-	UE_LOG(LogVeil, Log, TEXT("MissionSubsystem initialized with %d objectives."), Objectives.Num());
++	// D7: load the built-in registry. RegisterCueTable() can replace it later.
++	{
++		TArray<FVeilDialogueCue> Defaults;
++		VeilDialogue::GetDefaultCues(Defaults);
++		BuildCueLibrary(Defaults);
++	}
++
++	UE_LOG(LogVeil, Log, TEXT("MissionSubsystem initialized with %d objectives, %d cues."),
++		Objectives.Num(), CueLibrary.Num());
+ }
+ 
+ void UMissionSubsystem::CompleteObjective(FName ObjectiveId)
+@@ -61,6 +78,8 @@ void UMissionSubsystem::CompleteObjective(FName ObjectiveId)
+ 
+ 	UE_LOG(LogVeil, Log, TEXT("Objective completed: %s"), *ObjectiveId.ToString());
+ 
++	const FName DoneCueId = Objectives[CurrentIndex].CompleteCueId;
++
+ 	const bool bWasFinal = (CurrentIndex == Objectives.Num() - 1);
+ 	++CurrentIndex;
+ 
+@@ -69,6 +88,20 @@ void UMissionSubsystem::CompleteObjective(FName ObjectiveId)
+ 		bCampaignComplete = true;
+ 		CurrentIndex = Objectives.Num() - 1;
+ 	}
++
++	// The closing line first, then the next objective's opener queued behind it.
++	if (!DoneCueId.IsNone())
++	{
++		PlayCue(DoneCueId);
++	}
++	if (bWasFinal)
++	{
++		PlayCue(TEXT("M2_CLOSE"));
++	}
++	else
++	{
++		PlayObjectiveStartCue();
++	}
+ }
+ 
+ FText UMissionSubsystem::GetCurrentObjectiveText() const
+@@ -120,6 +153,7 @@ void UMissionSubsystem::NotifyBossDefeated()
+ void UMissionSubsystem::NotifyPlayerDied()
+ {
+ 	bPlayerDead = true;
++	StopAllDialogue();
+ 	UE_LOG(LogVeil, Log, TEXT("Player died - mission failed."));
+ }
+ 
+@@ -136,6 +170,13 @@ void UMissionSubsystem::ResetToMissionStart()
+ 	}
+ 	bPlayerDead = false;
+ 	bCampaignComplete = false;
++	StopAllDialogue();
++
++	// Once-cues stay spent across a checkpoint restart - the re-entry bank is
++	// what the player hears instead (Docs/drafts/darya_earpiece.md).
++	PlayCueBank(FName(*FString::Printf(TEXT("M%d_RETRY"), Mission)));
++	PlayObjectiveStartCue();
++
+ 	UE_LOG(LogVeil, Log, TEXT("Respawn at mission %d start."), Mission);
+ }
+ 
+@@ -144,6 +185,15 @@ void UMissionSubsystem::ResetCampaign()
+ 	CurrentIndex = 0;
+ 	bCampaignComplete = false;
+ 	bPlayerDead = false;
++
++	StopAllDialogue();
++	PlayedOnce.Empty();
++	LastPlayTime.Empty();
++	LastBankPull.Empty();
++
++	PlayCue(TEXT("M0_CO_1"));
++	PlayObjectiveStartCue();
++
+ 	UE_LOG(LogVeil, Log, TEXT("Campaign state reset."));
+ }
+ 
+@@ -157,4 +207,346 @@ bool UMissionSubsystem::IsPlayerDead() const
+ 	return bPlayerDead;
+ }
+ 
++// ---------------------------------------------------------------------------
++// D7 - dialogue / subtitle channel
++// ---------------------------------------------------------------------------
++
++void UMissionSubsystem::BuildCueLibrary(const TArray<FVeilDialogueCue>& InCues)
++{
++	CueLibrary.Empty(InCues.Num());
++	for (const FVeilDialogueCue& Cue : InCues)
++	{
++		if (Cue.CueId.IsNone())
++		{
++			UE_LOG(LogVeil, Warning, TEXT("Dialogue cue with no CueId skipped."));
++			continue;
++		}
++		CueLibrary.Add(Cue.CueId, Cue);
++	}
++}
++
++void UMissionSubsystem::RegisterCueTable(UDataTable* InCueTable)
++{
++	TArray<FVeilDialogueCue> Cues;
++
++	if (InCueTable)
++	{
++		TArray<FVeilDialogueCue*> Rows;
++		InCueTable->GetAllRows<FVeilDialogueCue>(TEXT("UMissionSubsystem::RegisterCueTable"), Rows);
++		Cues.Reserve(Rows.Num());
++		for (const FVeilDialogueCue* Row : Rows)
++		{
++			if (Row)
++			{
++				Cues.Add(*Row);
++			}
++		}
++	}
++
++	if (Cues.Num() == 0)
++	{
++		// A missing or empty table must not leave the game mute.
++		UE_LOG(LogVeil, Warning, TEXT("Cue table empty or null - falling back to the built-in registry."));
++		VeilDialogue::GetDefaultCues(Cues);
++	}
++
++	BuildCueLibrary(Cues);
++	UE_LOG(LogVeil, Log, TEXT("Registered %d dialogue cues."), CueLibrary.Num());
++}
++
++void UMissionSubsystem::PlayObjectiveStartCue()
++{
++	if (Objectives.IsValidIndex(CurrentIndex) && !Objectives[CurrentIndex].StartCueId.IsNone())
++	{
++		PlayCue(Objectives[CurrentIndex].StartCueId);
++	}
++}
++
++bool UMissionSubsystem::PlayCue(FName CueId)
++{
++	if (CueId.IsNone())
++	{
++		return false;
++	}
++	const FVeilDialogueCue* Cue = CueLibrary.Find(CueId);
++	if (!Cue)
++	{
++		UE_LOG(LogVeil, Warning, TEXT("PlayCue: unknown cue '%s'."), *CueId.ToString());
++		return false;
++	}
++	return TryPlayCue(*Cue, /*bForce=*/false);
++}
++
++bool UMissionSubsystem::PlayCueBank(FName BankId)
++{
++	if (BankId.IsNone())
++	{
++		return false;
++	}
++
++	const FName* LastPtr = LastBankPull.Find(BankId);
++	const FName Last = LastPtr ? *LastPtr : NAME_None;
++
++	TArray<const FVeilDialogueCue*> Eligible;
++	TArray<const FVeilDialogueCue*> Fallback;
++	for (const TPair<FName, FVeilDialogueCue>& Pair : CueLibrary)
++	{
++		const FVeilDialogueCue& Cue = Pair.Value;
++		if (Cue.Repeat != EVeilCueRepeat::Bank || Cue.BankId != BankId)
++		{
++			continue;
++		}
++		if (const float* Stamp = LastPlayTime.Find(Cue.CueId))
++		{
++			if (DialogueClock - *Stamp < Cue.CooldownSeconds)
++			{
++				continue;
++			}
++		}
++		Fallback.Add(&Cue);
++		if (Cue.CueId != Last)
++		{
++			Eligible.Add(&Cue);
++		}
++	}
++
++	// "No immediate repeats" is a preference, not a reason to say nothing at
++	// all: a one-line bank falls back to itself.
++	const TArray<const FVeilDialogueCue*>& Pool = Eligible.Num() > 0 ? Eligible : Fallback;
++	if (Pool.Num() == 0)
++	{
++		return false;
++	}
++
++	const FVeilDialogueCue* Pick = Pool[FMath::RandRange(0, Pool.Num() - 1)];
++	return TryPlayCue(*Pick, /*bForce=*/false);
++}
++
++void UMissionSubsystem::StopAllDialogue()
++{
++	ActiveLine.Clear();
++	PendingLines.Reset();
++	ChannelFreeSince = DialogueClock;
++}
++
++bool UMissionSubsystem::TryPlayCue(const FVeilDialogueCue& Cue, bool bForce)
++{
++	if (bForce)
++	{
++		BeginLine(Cue);
++		return true;
++	}
++
++	if (bPlayerDead)
++	{
++		return false;
++	}
++
++	// --- repeat rules ---
++	if (Cue.Repeat == EVeilCueRepeat::Once)
++	{
++		if (PlayedOnce.Contains(Cue.CueId))
++		{
++			return false;
++		}
++	}
++	else if (const float* Stamp = LastPlayTime.Find(Cue.CueId))
++	{
++		if (DialogueClock - *Stamp < Cue.CooldownSeconds)
++		{
++			return false;
++		}
++	}
++
++	// --- channel rules (one voice, see the priority table in D3) ---
++	if (!ActiveLine.IsValid())
++	{
++		if (Cue.Priority == EVeilCuePriority::P4_Reactive
++			&& (DialogueClock - ChannelFreeSince) < VeilDialogue::ReactiveQuietSeconds)
++		{
++			return false;
++		}
++		BeginLine(Cue);
++		return true;
++	}
++
++	// Hints and reactive chatter never talk over anything.
++	if (Cue.Priority == EVeilCuePriority::P3_Hint || Cue.Priority == EVeilCuePriority::P4_Reactive)
++	{
++		return false;
++	}
++
++	const uint8 NewPriority = static_cast<uint8>(Cue.Priority);
++	const uint8 ActivePriority = static_cast<uint8>(ActiveLine.Priority);
++	const bool bQueueable = (Cue.Priority == EVeilCuePriority::P0_Scripted
++		|| Cue.Priority == EVeilCuePriority::P1_Objective);
++
++	// Scripted story is never cut. Everything else queues or drops.
++	if (ActiveLine.Priority == EVeilCuePriority::P0_Scripted)
++	{
++		return bQueueable ? EnqueueLine(Cue) : false;
++	}
++
++	if (NewPriority < ActivePriority)
++	{
++		// A line short enough to be over almost immediately is allowed to
++		// finish - cutting it reads as a bug, not as urgency.
++		if (ActiveLine.Duration <= VeilDialogue::ShortCueGraceSeconds)
++		{
++			return EnqueueLine(Cue);
++		}
++		BeginLine(Cue);
++		return true;
++	}
++
++	return bQueueable ? EnqueueLine(Cue) : false;
++}
++
++void UMissionSubsystem::MarkPlayed(const FVeilDialogueCue& Cue)
++{
++	if (Cue.Repeat == EVeilCueRepeat::Once)
++	{
++		PlayedOnce.Add(Cue.CueId);
++	}
++	else
++	{
++		LastPlayTime.Add(Cue.CueId, DialogueClock);
++	}
++	if (Cue.Repeat == EVeilCueRepeat::Bank && !Cue.BankId.IsNone())
++	{
++		LastBankPull.Add(Cue.BankId, Cue.CueId);
++	}
++}
++
++void UMissionSubsystem::UnmarkPlayed(FName CueId)
++{
++	if (const FVeilDialogueCue* Cue = CueLibrary.Find(CueId))
++	{
++		if (Cue->Repeat == EVeilCueRepeat::Once)
++		{
++			PlayedOnce.Remove(CueId);
++		}
++		else
++		{
++			LastPlayTime.Remove(CueId);
++		}
++	}
++}
++
++void UMissionSubsystem::BeginLine(const FVeilDialogueCue& Cue)
++{
++	ActiveLine.CueId = Cue.CueId;
++	ActiveLine.Speaker = Cue.Speaker;
++	ActiveLine.Line = Cue.Line;
++	ActiveLine.NextCueId = Cue.NextCueId;
++	ActiveLine.Priority = Cue.Priority;
++	ActiveLine.Duration = Cue.DurationOverride > 0.f
++		? Cue.DurationOverride
++		: VeilDialogue::DeriveDuration(Cue.Line);
++	ActiveLine.Elapsed = 0.f;
++
++	MarkPlayed(Cue);
++}
++
++bool UMissionSubsystem::EnqueueLine(const FVeilDialogueCue& Cue)
++{
++	if (PendingLines.Num() >= VeilDialogue::MaxQueuedLines)
++	{
++		// The queue is priority-sorted, so the worst line is the last one.
++		const int32 Worst = PendingLines.Num() - 1;
++		if (static_cast<uint8>(Cue.Priority) >= static_cast<uint8>(PendingLines[Worst].Priority))
++		{
++			return false;
++		}
++		UnmarkPlayed(PendingLines[Worst].CueId);
++		PendingLines.RemoveAt(Worst);
++	}
++
++	FVeilActiveLine Line;
++	Line.CueId = Cue.CueId;
++	Line.Speaker = Cue.Speaker;
++	Line.Line = Cue.Line;
++	Line.NextCueId = Cue.NextCueId;
++	Line.Priority = Cue.Priority;
++	Line.Duration = Cue.DurationOverride > 0.f
++		? Cue.DurationOverride
++		: VeilDialogue::DeriveDuration(Cue.Line);
++	Line.Elapsed = 0.f;
++
++	int32 InsertAt = PendingLines.Num();
++	for (int32 i = 0; i < PendingLines.Num(); ++i)
++	{
++		if (static_cast<uint8>(PendingLines[i].Priority) > static_cast<uint8>(Line.Priority))
++		{
++			InsertAt = i;
++			break;
++		}
++	}
++	PendingLines.Insert(Line, InsertAt);
++
++	MarkPlayed(Cue);
++	return true;
++}
++
++void UMissionSubsystem::Tick(float DeltaTime)
++{
++	DialogueClock += DeltaTime;
++
++	if (ActiveLine.IsValid())
++	{
++		ActiveLine.Elapsed += DeltaTime;
++		if (ActiveLine.Elapsed >= ActiveLine.Duration)
++		{
++			const FName NextCueId = ActiveLine.NextCueId;
++			ActiveLine.Clear();
++			ChannelFreeSince = DialogueClock;
++
++			// A chained line continues the same breath: no gates, no queue.
++			if (!NextCueId.IsNone())
++			{
++				if (const FVeilDialogueCue* Next = CueLibrary.Find(NextCueId))
++				{
++					TryPlayCue(*Next, /*bForce=*/true);
++					return;
++				}
++				UE_LOG(LogVeil, Warning, TEXT("Dangling NextCueId '%s'."), *NextCueId.ToString());
++			}
++		}
++	}
++
++	if (!ActiveLine.IsValid() && PendingLines.Num() > 0)
++	{
++		ActiveLine = PendingLines[0];
++		ActiveLine.Elapsed = 0.f;
++		PendingLines.RemoveAt(0);
++	}
++}
++
++bool UMissionSubsystem::HasActiveLine() const
++{
++	return ActiveLine.IsValid();
++}
++
++FText UMissionSubsystem::GetActiveLineText() const
++{
++	return ActiveLine.IsValid() ? ActiveLine.Line : FText::GetEmpty();
++}
++
++FName UMissionSubsystem::GetActiveLineSpeaker() const
++{
++	return ActiveLine.IsValid() ? ActiveLine.Speaker : NAME_None;
++}
++
++float UMissionSubsystem::GetActiveLineAlpha() const
++{
++	if (!ActiveLine.IsValid())
++	{
++		return 0.f;
++	}
++	const float FadeIn = FMath::Clamp(ActiveLine.Elapsed / VeilDialogue::FadeSeconds, 0.f, 1.f);
++	const float FadeOut = FMath::Clamp(
++		(ActiveLine.Duration - ActiveLine.Elapsed) / VeilDialogue::FadeSeconds, 0.f, 1.f);
++	return FMath::Min(FadeIn, FadeOut);
++}
++
+ #undef LOCTEXT_NAMESPACE
+diff --git a/Source/VeilOfSuccession/MissionSubsystem.h b/Source/VeilOfSuccession/MissionSubsystem.h
+index 3c3d809..3c6a2da 100644
+--- a/Source/VeilOfSuccession/MissionSubsystem.h
++++ b/Source/VeilOfSuccession/MissionSubsystem.h
+@@ -3,8 +3,12 @@
+ 
+ #include "CoreMinimal.h"
+ #include "Subsystems/GameInstanceSubsystem.h"
++#include "Tickable.h"
++#include "VeilDialogue.h"
+ #include "MissionSubsystem.generated.h"
+ 
++class UDataTable;
++
+ USTRUCT()
+ struct FVeilObjective
+ {
+@@ -15,13 +19,22 @@ struct FVeilObjective
+ 	UPROPERTY() FText MissionTitle;
+ 	UPROPERTY() FText Text;
+ 
++	// D7: the earpiece cue that opens this objective and the one that closes it.
++	// Empty = silence, which is a legitimate authoring choice, not a bug.
++	UPROPERTY() FName StartCueId;
++	UPROPERTY() FName CompleteCueId;
++
+ 	FVeilObjective() {}
+ 	FVeilObjective(FName InId, int32 InMissionIndex, const FText& InTitle, const FText& InText)
+ 		: Id(InId), MissionIndex(InMissionIndex), MissionTitle(InTitle), Text(InText) {}
++	FVeilObjective(FName InId, int32 InMissionIndex, const FText& InTitle, const FText& InText,
++		FName InStartCueId, FName InCompleteCueId)
++		: Id(InId), MissionIndex(InMissionIndex), MissionTitle(InTitle), Text(InText)
++		, StartCueId(InStartCueId), CompleteCueId(InCompleteCueId) {}
+ };
+ 
+ UCLASS()
+-class VEILOFSUCCESSION_API UMissionSubsystem : public UGameInstanceSubsystem
++class VEILOFSUCCESSION_API UMissionSubsystem : public UGameInstanceSubsystem, public FTickableGameObject
+ {
+ 	GENERATED_BODY()
+ 
+@@ -47,9 +60,67 @@ public:
+ 	UFUNCTION(BlueprintCallable) bool IsCampaignComplete() const;
+ 	UFUNCTION(BlueprintCallable) bool IsPlayerDead() const;
+ 
++	// ---------------------------------------------------------------------
++	// D7 - dialogue / subtitle channel
++	// ---------------------------------------------------------------------
++
++	// Ask for a specific line. Returns false when the cue is unknown or a
++	// repeat/priority rule refused it - callers may fire these every frame.
++	UFUNCTION(BlueprintCallable) bool PlayCue(FName CueId);
++
++	// Random pull from a bank, skipping whichever member played last.
++	UFUNCTION(BlueprintCallable) bool PlayCueBank(FName BankId);
++
++	// Clears the channel and the queue (death, level change, hard cuts).
++	UFUNCTION(BlueprintCallable) void StopAllDialogue();
++
++	// Swap the built-in registry for a designer-authored table. Rows are keyed
++	// by their CueId field, not their row name, so the row names are free.
++	UFUNCTION(BlueprintCallable) void RegisterCueTable(UDataTable* InCueTable);
++
++	UFUNCTION(BlueprintCallable) bool HasActiveLine() const;
++	UFUNCTION(BlueprintCallable) FText GetActiveLineText() const;
++	UFUNCTION(BlueprintCallable) FName GetActiveLineSpeaker() const;
++
++	// 0..1 fade envelope for the HUD; 1 for the body of the line.
++	UFUNCTION(BlueprintCallable) float GetActiveLineAlpha() const;
++
++	// FTickableGameObject - drives the subtitle clock. Does not tick while the
++	// game is paused (base class default), which is what we want.
++	virtual void Tick(float DeltaTime) override;
++	virtual TStatId GetStatId() const override
++	{
++		RETURN_QUICK_DECLARE_CYCLE_STAT(UMissionSubsystem, STATGROUP_Tickables);
++	}
++	virtual bool IsTickable() const override { return !IsTemplate(); }
++	virtual ETickableTickType GetTickableTickType() const override
++	{
++		return IsTemplate() ? ETickableTickType::Never : ETickableTickType::Conditional;
++	}
++
+ private:
+ 	UPROPERTY() TArray<FVeilObjective> Objectives;
+ 	UPROPERTY() int32 CurrentIndex = 0;
+ 	UPROPERTY() bool bCampaignComplete = false;
+ 	UPROPERTY() bool bPlayerDead = false;
++
++	// --- D7 state ---
++	UPROPERTY() TMap<FName, FVeilDialogueCue> CueLibrary;
++	UPROPERTY() TMap<FName, FName> LastBankPull;      // BankId -> last CueId played
++	UPROPERTY() TMap<FName, float> LastPlayTime;      // CueId  -> DialogueClock stamp
++	UPROPERTY() TSet<FName> PlayedOnce;
++	UPROPERTY() FVeilActiveLine ActiveLine;
++	UPROPERTY() TArray<FVeilActiveLine> PendingLines;
++
++	// Own clock: world time restarts on OpenLevel, this does not.
++	float DialogueClock = 0.f;
++	float ChannelFreeSince = 0.f;
++
++	void BuildCueLibrary(const TArray<FVeilDialogueCue>& InCues);
++	bool TryPlayCue(const FVeilDialogueCue& Cue, bool bForce);
++	void BeginLine(const FVeilDialogueCue& Cue);
++	bool EnqueueLine(const FVeilDialogueCue& Cue);
++	void MarkPlayed(const FVeilDialogueCue& Cue);
++	void UnmarkPlayed(FName CueId);
++	void PlayObjectiveStartCue();
+ };
+diff --git a/Source/VeilOfSuccession/VeilDialogue.cpp b/Source/VeilOfSuccession/VeilDialogue.cpp
+new file mode 100644
+index 0000000..2e49c76
+--- /dev/null
++++ b/Source/VeilOfSuccession/VeilDialogue.cpp
+@@ -0,0 +1,297 @@
++// Veil of Succession - fictional political thriller. All characters fictitious.
++//
++// D7 built-in dialogue registry. Every line here is the canon text from
++// Docs/MISSION_SCRIPTS.md as organised in Docs/drafts/darya_earpiece.md, with
++// typographic punctuation folded to ASCII to match the rest of the codebase.
++// The user's voice pass happens in Content/Data/VeilDialogueCues.csv, which is
++// generated from this same list and can be imported as a UDataTable and handed
++// to UMissionSubsystem::RegisterCueTable to override everything below.
++#include "VeilDialogue.h"
++
++#define LOCTEXT_NAMESPACE "VeilDialogue"
++
++float VeilDialogue::DeriveDuration(const FText& Line)
++{
++	const FString S = Line.ToString();
++	TArray<FString> Words;
++	S.ParseIntoArrayWS(Words);
++	const float Raw = (Words.Num() / WordsPerSecond) + TailSeconds;
++	return FMath::Clamp(Raw, MinLineSeconds, MaxLineSeconds);
++}
++
++void VeilDialogue::GetDefaultCues(TArray<FVeilDialogueCue>& OutCues)
++{
++	OutCues.Reset();
++
++	auto Add = [&OutCues](FName InId, FName InSpeaker, const FText& InLine,
++		EVeilCuePriority InPriority, EVeilCueRepeat InRepeat,
++		FName InBankId, FName InNextCueId, float InCooldown)
++	{
++		FVeilDialogueCue Cue;
++		Cue.CueId = InId;
++		Cue.Speaker = InSpeaker;
++		Cue.Line = InLine;
++		Cue.Priority = InPriority;
++		Cue.Repeat = InRepeat;
++		Cue.BankId = InBankId;
++		Cue.NextCueId = InNextCueId;
++		Cue.CooldownSeconds = InCooldown;
++		Cue.DurationOverride = 0.f;
++		OutCues.Add(MoveTemp(Cue));
++	};
++
++	Add(TEXT("M0_CO_1"), TEXT("Darya"),
++		LOCTEXT("M0_CO_1", "You're on the wall's blind side. Cameras sweep left to right, thirty-second cycle. There's a reception breaking up in the east garden - stay to its edge and you're just another guest who's had too much tea."),
++		EVeilCuePriority::P0_Scripted, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_CO_2"), 0.f);
++	Add(TEXT("M0_CO_2"), TEXT("Yas"),
++		LOCTEXT("M0_CO_2", "And if someone asks whose guest I am?"),
++		EVeilCuePriority::P0_Scripted, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_CO_3"), 0.f);
++	Add(TEXT("M0_CO_3"), TEXT("Darya"),
++		LOCTEXT("M0_CO_3", "You're Custodian Rahimi's daughter. Nobody asks the Rahimi girl anything. That's the whole plan."),
++		EVeilCuePriority::P0_Scripted, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_CO_4"), 0.f);
++	Add(TEXT("M0_CO_4"), TEXT("Yas"),
++		LOCTEXT("M0_CO_4", "Comforting."),
++		EVeilCuePriority::P0_Scripted, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_CO_5"), 0.f);
++	Add(TEXT("M0_CO_5"), TEXT("Darya"),
++		LOCTEXT("M0_CO_5", "It's not meant to be. Get to the palace doors before the Council rises. Your father is in that room, Yas. Move like you belong and no one will look twice."),
++		EVeilCuePriority::P0_Scripted, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_EG_START"), TEXT("Darya"),
++		LOCTEXT("M0_EG_START", "Over you go. Keep low along the hedge line - the spotlights don't reach the roses."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_EG_SPOT"), TEXT("Darya"),
++		LOCTEXT("M0_EG_SPOT", "Light incoming, right to left. Behind the fountain. Wait for it to pass."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_EG_GUESTS"), TEXT("Darya"),
++		LOCTEXT("M0_EG_GUESTS", "Those are guests, not guards. Don't dart them, don't spook them. A screaming undersecretary is worse than any alarm."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 30.0f);
++	Add(TEXT("M0_EG_SPRINT"), TEXT("Darya"),
++		LOCTEXT("M0_EG_SPRINT", "Slow down. A guest strolls. Only the guilty run."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 20.0f);
++	Add(TEXT("M0_EG_DONE"), TEXT("Darya"),
++		LOCTEXT("M0_EG_DONE", "Good. You're inside the garden proper now. That's the last easy part of the night."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_KC_START"), TEXT("Darya"),
++		LOCTEXT("M0_KC_START", "See the captain by the cypress? Omid Shirazi. Palace guard, off the clock, sneaking a cigarette he swore to his wife he'd quit. His card opens the inner doors."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_KC_START_2"), 0.f);
++	Add(TEXT("M0_KC_START_2"), TEXT("Yas"),
++		LOCTEXT("M0_KC_START_2", "You want me to ask him nicely."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_KC_START_3"), 0.f);
++	Add(TEXT("M0_KC_START_3"), TEXT("Darya"),
++		LOCTEXT("M0_KC_START_3", "I want you to take it off him without him ever knowing it's gone. Come up behind while he's still. Ease - don't grab."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_KC_TURN"), TEXT("Darya"),
++		LOCTEXT("M0_KC_TURN", "He's turning - break off, break off. Be a woman admiring the roses."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 10.0f);
++	Add(TEXT("M0_KC_STALL"), TEXT("Darya"),
++		LOCTEXT("M0_KC_STALL", "He finishes that cigarette in ninety seconds and walks. Behind him, close, patient."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_KC_DONE"), TEXT("Yas"),
++		LOCTEXT("M0_KC_DONE", "Sorry, Captain. Give my regards to your wife."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_KC_DONE_2"), 0.f);
++	Add(TEXT("M0_KC_DONE_2"), TEXT("Darya"),
++		LOCTEXT("M0_KC_DONE_2", "Clean. He'll pat his pocket at the gate and blame the tailor. Card's live - get to the doors."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_EP_START"), TEXT("Darya"),
++		LOCTEXT("M0_EP_START", "Main doors, top of the steps. There's an overwatch on the colonnade roof - stay under the arches and he never sees you."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_EP_OVERWATCH"), TEXT("Darya"),
++		LOCTEXT("M0_EP_OVERWATCH", "Rooftop spotter, eleven o'clock. He calls, he doesn't chase. Don't give him a reason to call."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 30.0f);
++	Add(TEXT("M0_EP_HEAT"), TEXT("Darya"),
++		LOCTEXT("M0_EP_HEAT", "They're getting curious. Ease off, let it cool. We are not caught until we're caught."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 30.0f);
++	Add(TEXT("M0_EP_DONE"), TEXT("Darya"),
++		LOCTEXT("M0_EP_DONE", "Card's good. The doors are open."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_EP_DONE_2"), 0.f);
++	Add(TEXT("M0_EP_DONE_2"), TEXT("Yas"),
++		LOCTEXT("M0_EP_DONE_2", "Then I'm in the room with my father and the man trying to bury him."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M0_EP_DONE_3"), 0.f);
++	Add(TEXT("M0_EP_DONE_3"), TEXT("Darya"),
++		LOCTEXT("M0_EP_DONE_3", "One at a time, Yas. Listen first. Fight never."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_EV_START"), TEXT("Darya"),
++		LOCTEXT("M1_EV_START", "The chamber's through the columns. You can't go in - but there's a service alcove where the ventilation carries every word. Plant your probe, stay in the zone, let it fill. Guards pass on a rotation; move between the two alcoves when they do."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_EV_START_2"), 0.f);
++	Add(TEXT("M1_EV_START_2"), TEXT("Yas"),
++		LOCTEXT("M1_EV_START_2", "How long?"),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_EV_START_3"), 0.f);
++	Add(TEXT("M1_EV_START_3"), TEXT("Darya"),
++		LOCTEXT("M1_EV_START_3", "Long enough to hear something worth your neck. Stay in the sound."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_EV_ROT"), TEXT("Darya"),
++		LOCTEXT("M1_EV_ROT", "Rotation. Slide to the far alcove - the sound carries there too."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 15.0f);
++	Add(TEXT("M1_EV_PROBE"), TEXT("Darya"),
++		LOCTEXT("M1_EV_PROBE", "Your probe's showing. Tuck it, or a guard will find it before you find your answer."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 20.0f);
++	Add(TEXT("M1_EV_LEAVE"), TEXT("Darya"),
++		LOCTEXT("M1_EV_LEAVE", "You're out of the sound. Back in the alcove - every word we miss, we miss forever."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 15.0f);
++	Add(TEXT("M1_EV_DONE"), TEXT("Yas"),
++		LOCTEXT("M1_EV_DONE", "He's blackmailing the whole Council. And my father just dared him to do it."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_EV_DONE_2"), 0.f);
++	Add(TEXT("M1_EV_DONE_2"), TEXT("Darya"),
++		LOCTEXT("M1_EV_DONE_2", "Then the files are real, and they're here. That \"inventory\" is the succession dossier, Yas. If we take it, we take his whole plan out of the drawer with it."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_EV_DONE_3"), 0.f);
++	Add(TEXT("M1_EV_DONE_3"), TEXT("Yas"),
++		LOCTEXT("M1_EV_DONE_3", "Where."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_EV_DONE_4"), 0.f);
++	Add(TEXT("M1_EV_DONE_4"), TEXT("Darya"),
++		LOCTEXT("M1_EV_DONE_4", "The chamber empties in seconds. He wouldn't carry it out through a hall full of Custodians. It's still in that room. Go - before the guards reset."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_SD_START"), TEXT("Darya"),
++		LOCTEXT("M1_SD_START", "They've adjourned. You've got a narrow window before the room's locked for the night. The dossier - a leather case, he wouldn't trust a screen with it."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_SD_SWEEP"), TEXT("Darya"),
++		LOCTEXT("M1_SD_SWEEP", "Recess detail's coming back to sweep the room. In and out, Yas."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_SD_HINT"), TEXT("Darya"),
++		LOCTEXT("M1_SD_HINT", "Check the head of the table. A man like Azadi keeps his knife where his hand rests."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_SD_DONE"), TEXT("Yas"),
++		LOCTEXT("M1_SD_DONE", "I have it. Every name. Every debt he thinks he owns."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_SD_DONE_2"), 0.f);
++	Add(TEXT("M1_SD_DONE_2"), TEXT("Darya"),
++		LOCTEXT("M1_SD_DONE_2", "That's the ballgame. Now we walk it out quietly and none of this was ever -"),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_SD_DONE_3"), 0.f);
++	Add(TEXT("M1_SD_DONE_3"), TEXT("Darya"),
++		LOCTEXT("M1_SD_DONE_3", "...Yas. Someone's coming back for it."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_TR_START"), TEXT("Darya"),
++		LOCTEXT("M1_TR_START", "Don't go back the way you came, the hall's filling. Through the far doors - the throne room, then out the garden side."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_TR_START_2"), 0.f);
++	Add(TEXT("M1_TR_START_2"), TEXT("Yas"),
++		LOCTEXT("M1_TR_START_2", "The throne room's a dead end, Darya."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M1_TR_START_3"), 0.f);
++	Add(TEXT("M1_TR_START_3"), TEXT("Darya"),
++		LOCTEXT("M1_TR_START_3", "It's a door. All rooms are doors if you're brave enough. Move."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_TR_MID"), TEXT("Darya"),
++		LOCTEXT("M1_TR_MID", "He'll know the case is gone the second he reaches for it. Speed now, quiet second."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M1_TR_COVER"), TEXT("Darya"),
++		LOCTEXT("M1_TR_COVER", "Yas - he won't let you walk. Cover, and make him work for it."),
++		EVeilCuePriority::P0_Scripted, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M2_BOSS_P2"), TEXT("Darya"),
++		LOCTEXT("M2_BOSS_P2", "He's brought friends. Thin them out and keep off his line - he telegraphs before every volley."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M2_BOSS_HEART"), TEXT("Darya"),
++		LOCTEXT("M2_BOSS_HEART", "Heartbeat's up, Yas. Breathe. He's slower than his own pride."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Bank, TEXT("M2_BOSS_HEART"), TEXT(""), 25.0f);
++	Add(TEXT("M2_BOSS_HEART2"), TEXT("Darya"),
++		LOCTEXT("M2_BOSS_HEART2", "Cover. Let your heart slow before you trade with him again."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Bank, TEXT("M2_BOSS_HEART"), TEXT(""), 25.0f);
++	Add(TEXT("M2_BOSS_DONE"), TEXT("Darya"),
++		LOCTEXT("M2_BOSS_DONE", "He'll be out ninety seconds, no more. Don't stay to argue with a sleeping man. Garden side, extraction at the gate. Go."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M2_ESC_START"), TEXT("Darya"),
++		LOCTEXT("M2_ESC_START", "Back through the roses, the way you came. The garden's a different animal now - they'll have heard the noise."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M2_ESC_ALERT"), TEXT("Darya"),
++		LOCTEXT("M2_ESC_ALERT", "They know something happened in the palace, they just don't know it's you yet. Keep it that way."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M2_ESC_MID"), TEXT("Darya"),
++		LOCTEXT("M2_ESC_MID", "Case first, glory never. If it comes to it, you drop me before you drop that dossier."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT("M2_ESC_MID_2"), 0.f);
++	Add(TEXT("M2_ESC_MID_2"), TEXT("Yas"),
++		LOCTEXT("M2_ESC_MID_2", "I'd never drop you, Darya."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT("M2_ESC_MID_3"), 0.f);
++	Add(TEXT("M2_ESC_MID_3"), TEXT("Darya"),
++		LOCTEXT("M2_ESC_MID_3", "...Just get to the gate, you sentimental idiot."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M2_ESC_SPOT"), TEXT("Darya"),
++		LOCTEXT("M2_ESC_SPOT", "Spotlight - move, move, the fountains, like we practiced."),
++		EVeilCuePriority::P2_Conditional, EVeilCueRepeat::ReArm, TEXT(""), TEXT(""), 20.0f);
++	Add(TEXT("M2_ESC_DONE"), TEXT("Darya"),
++		LOCTEXT("M2_ESC_DONE", "Car's running. Case in the back. - You did it, Yas."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT("M2_ESC_DONE_2"), 0.f);
++	Add(TEXT("M2_ESC_DONE_2"), TEXT("Yas"),
++		LOCTEXT("M2_ESC_DONE_2", "Did I? He was awake enough to smile."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M2_CLOSE"), TEXT("Darya"),
++		LOCTEXT("M2_CLOSE", "Get some sleep, Yas. The succession is safe."),
++		EVeilCuePriority::P0_Scripted, EVeilCueRepeat::Once, TEXT(""), TEXT(""), 0.f);
++	Add(TEXT("M0_RETRY_01"), TEXT("Darya"),
++		LOCTEXT("M0_RETRY_01", "Still with me? Good. The wall hasn't moved and neither has the plan."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Bank, TEXT("M0_RETRY"), TEXT(""), 0.f);
++	Add(TEXT("M0_RETRY_02"), TEXT("Darya"),
++		LOCTEXT("M0_RETRY_02", "From the top, Yas. The roses will keep our secret."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Bank, TEXT("M0_RETRY"), TEXT(""), 0.f);
++	Add(TEXT("M1_RETRY_01"), TEXT("Darya"),
++		LOCTEXT("M1_RETRY_01", "Back in the hall. They're jumpy now - give them nothing to be jumpy about."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Bank, TEXT("M1_RETRY"), TEXT(""), 0.f);
++	Add(TEXT("M1_RETRY_02"), TEXT("Darya"),
++		LOCTEXT("M1_RETRY_02", "Again, and quieter. The night's still ours to lose."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Bank, TEXT("M1_RETRY"), TEXT(""), 0.f);
++	Add(TEXT("M2_RETRY_01"), TEXT("Darya"),
++		LOCTEXT("M2_RETRY_01", "On your feet. The case is ours until it isn't."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Bank, TEXT("M2_RETRY"), TEXT(""), 0.f);
++	Add(TEXT("M2_RETRY_02"), TEXT("Darya"),
++		LOCTEXT("M2_RETRY_02", "The gate's still there, Yas. So are you. Move."),
++		EVeilCuePriority::P1_Objective, EVeilCueRepeat::Bank, TEXT("M2_RETRY"), TEXT(""), 0.f);
++	Add(TEXT("RX_DET_UP_01"), TEXT("Darya"),
++		LOCTEXT("RX_DET_UP_01", "They're curious, not certain. Sink back."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_UP"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_UP_02"), TEXT("Darya"),
++		LOCTEXT("RX_DET_UP_02", "Someone thinks they saw a ghost. Prove them right about the ghost part - vanish."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_UP"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_UP_03"), TEXT("Darya"),
++		LOCTEXT("RX_DET_UP_03", "Ease off, Yas. We cool this before it climbs."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_UP"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_UP_04"), TEXT("Darya"),
++		LOCTEXT("RX_DET_UP_04", "Not caught. Curious. There's a whole world between those two words. Live in it."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_UP"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_RED_01"), TEXT("Darya"),
++		LOCTEXT("RX_DET_RED_01", "That's your heartbeat you're feeling. Slow it. Break their line and it fades."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_RED"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_RED_02"), TEXT("Darya"),
++		LOCTEXT("RX_DET_RED_02", "One more set of eyes and it's over - and your father with it. Get gone."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_RED"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_RED_03"), TEXT("Darya"),
++		LOCTEXT("RX_DET_RED_03", "Red, Yas. Move like it."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_RED"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_COOL_01"), TEXT("Darya"),
++		LOCTEXT("RX_DET_COOL_01", "There. It's passing. Breathe out."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_COOL"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_COOL_02"), TEXT("Darya"),
++		LOCTEXT("RX_DET_COOL_02", "They've talked themselves out of it. Men always do."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_COOL"), TEXT(""), 12.0f);
++	Add(TEXT("RX_DET_COOL_03"), TEXT("Darya"),
++		LOCTEXT("RX_DET_COOL_03", "Back to a ghost. Good."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DET_COOL"), TEXT(""), 12.0f);
++	Add(TEXT("RX_KILL_01"), TEXT("Darya"),
++		LOCTEXT("RX_KILL_01", "...He's not getting up, Yas. That's a body now, and bodies get found."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_KILL"), TEXT(""), 15.0f);
++	Add(TEXT("RX_KILL_02"), TEXT("Darya"),
++		LOCTEXT("RX_KILL_02", "Hide him. A sleeping man is a shift change; a dead one is an investigation."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_KILL"), TEXT(""), 15.0f);
++	Add(TEXT("RX_KILL_03"), TEXT("Darya"),
++		LOCTEXT("RX_KILL_03", "I won't lecture you. But the morning will."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_KILL"), TEXT(""), 15.0f);
++	Add(TEXT("RX_DART_01"), TEXT("Darya"),
++		LOCTEXT("RX_DART_01", "Down and dreaming. Tidy."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DART"), TEXT(""), 15.0f);
++	Add(TEXT("RX_DART_02"), TEXT("Darya"),
++		LOCTEXT("RX_DART_02", "Nine minutes of nap. Use them."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DART"), TEXT(""), 15.0f);
++	Add(TEXT("RX_DART_03"), TEXT("Darya"),
++		LOCTEXT("RX_DART_03", "Cleaner. Move him out of the light."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_DART"), TEXT(""), 15.0f);
++	Add(TEXT("RX_STALL_01"), TEXT("Darya"),
++		LOCTEXT("RX_STALL_01", "The Council doesn't wait, and neither does the night."),
++		EVeilCuePriority::P3_Hint, EVeilCueRepeat::Bank, TEXT("RX_STALL"), TEXT(""), 30.0f);
++	Add(TEXT("RX_STALL_02"), TEXT("Darya"),
++		LOCTEXT("RX_STALL_02", "Whatever you're admiring, admire it faster."),
++		EVeilCuePriority::P3_Hint, EVeilCueRepeat::Bank, TEXT("RX_STALL"), TEXT(""), 30.0f);
++	Add(TEXT("RX_STALL_03"), TEXT("Darya"),
++		LOCTEXT("RX_STALL_03", "Clock, Yas."),
++		EVeilCuePriority::P3_Hint, EVeilCueRepeat::Bank, TEXT("RX_STALL"), TEXT(""), 30.0f);
++	Add(TEXT("RX_INTEL_01"), TEXT("Darya"),
++		LOCTEXT("RX_INTEL_01", "Keep that. Every scrap is a vote we'll need later."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_INTEL"), TEXT(""), 15.0f);
++	Add(TEXT("RX_INTEL_02"), TEXT("Darya"),
++		LOCTEXT("RX_INTEL_02", "Photograph it, don't pocket it - a missing paper is a question, a copied one isn't."),
++		EVeilCuePriority::P4_Reactive, EVeilCueRepeat::Bank, TEXT("RX_INTEL"), TEXT(""), 15.0f);
++}
++
++#undef LOCTEXT_NAMESPACE
+diff --git a/Source/VeilOfSuccession/VeilDialogue.h b/Source/VeilOfSuccession/VeilDialogue.h
+new file mode 100644
+index 0000000..8a98e3e
+--- /dev/null
++++ b/Source/VeilOfSuccession/VeilDialogue.h
+@@ -0,0 +1,119 @@
++// Veil of Succession - fictional political thriller. All characters fictitious.
++//
++// D7: dialogue-cue types for the subtitle system. The runtime channel lives in
++// UMissionSubsystem; this header only describes WHAT a cue is, so the data can
++// come from either the built-in registry (VeilDialogue.cpp) or a UDataTable
++// imported from Content/Data/VeilDialogueCues.csv.
++#pragma once
++
++#include "CoreMinimal.h"
++#include "Engine/DataTable.h"
++#include "VeilDialogue.generated.h"
++
++// One voice channel. Lower value = higher priority (see Docs/drafts/darya_earpiece.md).
++UENUM()
++enum class EVeilCuePriority : uint8
++{
++	// Scripted story: cold open, Council scene, throne-room exchange, closing.
++	// Never interrupted; everything else queues or drops.
++	P0_Scripted    UMETA(DisplayName = "P0 Scripted story"),
++	// Objective start / complete. Interrupts P2-P4, queues behind P0.
++	P1_Objective   UMETA(DisplayName = "P1 Objective"),
++	// Conditional / ambient mission cues. Interrupts P3-P4 only.
++	P2_Conditional UMETA(DisplayName = "P2 Conditional"),
++	// Hint ladder. Plays only if the channel is free.
++	P3_Hint        UMETA(DisplayName = "P3 Hint"),
++	// Reactive banks and idles. Plays only if the channel has been free a while.
++	P4_Reactive    UMETA(DisplayName = "P4 Reactive")
++};
++
++UENUM()
++enum class EVeilCueRepeat : uint8
++{
++	// Fires once per campaign run. Survives checkpoint restarts by design:
++	// a replayed objective must NOT replay its cold open (canon).
++	Once  UMETA(DisplayName = "Once"),
++	// May fire again once CooldownSeconds have passed.
++	ReArm UMETA(DisplayName = "Re-arm"),
++	// Random pull from the cues sharing BankId; never the same one twice running.
++	Bank  UMETA(DisplayName = "Bank")
++};
++
++// A single authored line. FTableRowBase so the whole table can be swapped for a
++// designer-editable UDataTable without touching code.
++USTRUCT()
++struct FVeilDialogueCue : public FTableRowBase
++{
++	GENERATED_BODY()
++
++	// Stable id, e.g. M0_EG_START. Row names in the CSV are Cue_<CueId>.
++	UPROPERTY(EditAnywhere) FName CueId;
++
++	// Darya / Yas / Azadi / Hossein. Drives the on-screen name and its colour.
++	UPROPERTY(EditAnywhere) FName Speaker;
++
++	UPROPERTY(EditAnywhere) FText Line;
++
++	UPROPERTY(EditAnywhere) EVeilCuePriority Priority = EVeilCuePriority::P2_Conditional;
++
++	UPROPERTY(EditAnywhere) EVeilCueRepeat Repeat = EVeilCueRepeat::Once;
++
++	// Only meaningful when Repeat == Bank.
++	UPROPERTY(EditAnywhere) FName BankId;
++
++	// Multi-line exchanges are authored as a chain: when this line ends, the
++	// next one plays immediately at the same priority, bypassing the gates.
++	UPROPERTY(EditAnywhere) FName NextCueId;
++
++	// Only meaningful when Repeat == ReArm.
++	UPROPERTY(EditAnywhere) float CooldownSeconds = 20.f;
++
++	// 0 = derive the duration from the word count (never hand-author these).
++	UPROPERTY(EditAnywhere) float DurationOverride = 0.f;
++};
++
++// The line currently occupying the channel.
++USTRUCT()
++struct FVeilActiveLine
++{
++	GENERATED_BODY()
++
++	UPROPERTY() FName CueId;
++	UPROPERTY() FName Speaker;
++	UPROPERTY() FText Line;
++	UPROPERTY() FName NextCueId;
++	UPROPERTY() EVeilCuePriority Priority = EVeilCuePriority::P4_Reactive;
++	UPROPERTY() float Duration = 0.f;
++	UPROPERTY() float Elapsed = 0.f;
++
++	bool IsValid() const { return !CueId.IsNone(); }
++	void Clear() { *this = FVeilActiveLine(); }
++};
++
++namespace VeilDialogue
++{
++	// Authoring constants. Reading speed is the one from the D3 cue sheet:
++	// words / 2.5 + 0.4s tail, clamped so one-word lines are still readable.
++	static constexpr float WordsPerSecond = 2.5f;
++	static constexpr float TailSeconds = 0.4f;
++	static constexpr float MinLineSeconds = 1.4f;
++	static constexpr float MaxLineSeconds = 9.0f;
++
++	// A cue this short is allowed to finish rather than be cut off by a
++	// higher-priority one. Flagged for playtest in the D7 test plan.
++	static constexpr float ShortCueGraceSeconds = 2.5f;
++
++	// P4 reactive lines only speak after the channel has been quiet this long.
++	static constexpr float ReactiveQuietSeconds = 2.0f;
++
++	// Subtitle fade in / out, purely cosmetic.
++	static constexpr float FadeSeconds = 0.25f;
++
++	// Anything beyond this is dropped rather than stacking a monologue.
++	static constexpr int32 MaxQueuedLines = 2;
++
++	VEILOFSUCCESSION_API float DeriveDuration(const FText& Line);
++
++	// The built-in table, used when no UDataTable has been registered.
++	VEILOFSUCCESSION_API void GetDefaultCues(TArray<FVeilDialogueCue>& OutCues);
++}
+diff --git a/Source/VeilOfSuccession/VeilHUD.cpp b/Source/VeilOfSuccession/VeilHUD.cpp
+index 8fc0059..db8cfe6 100644
+--- a/Source/VeilOfSuccession/VeilHUD.cpp
++++ b/Source/VeilOfSuccession/VeilHUD.cpp
+@@ -46,6 +46,97 @@ void AVeilHUD::DrawCenteredLabel(const FString& Text, float CenterX, float Y, co
+ 	DrawLabel(Text, CenterX - TW * 0.5f, Y, Color, bLarge);
+ }
+ 
++void AVeilHUD::WrapToWidth(const FString& Text, UFont* Font, float MaxWidth, TArray<FString>& OutLines)
++{
++	OutLines.Reset();
++	TArray<FString> Words;
++	Text.ParseIntoArrayWS(Words);
++
++	FString Current;
++	for (const FString& W : Words)
++	{
++		const FString Candidate = Current.IsEmpty() ? W : Current + TEXT(" ") + W;
++		float TW = 0.f, TH = 0.f;
++		GetTextSize(Candidate, TW, TH, Font);
++		if (TW > MaxWidth && !Current.IsEmpty())
++		{
++			OutLines.Add(Current);
++			Current = W;
++		}
++		else
++		{
++			Current = Candidate;
++		}
++	}
++	if (!Current.IsEmpty())
++	{
++		OutLines.Add(Current);
++	}
++}
++
++void AVeilHUD::DrawSubtitles(UMissionSubsystem* Mission, float SW, float SH)
++{
++	if (!Mission || !Mission->HasActiveLine() || !GEngine)
++	{
++		return;
++	}
++
++	const float Alpha = Mission->GetActiveLineAlpha();
++	if (Alpha <= 0.01f)
++	{
++		return;
++	}
++
++	UFont* Font = GEngine->GetLargeFont();
++	TArray<FString> Lines;
++	WrapToWidth(Mission->GetActiveLineText().ToString(), Font, SW * 0.62f, Lines);
++	if (Lines.Num() == 0)
++	{
++		return;
++	}
++
++	// Speaker colour is the only thing separating two voices on one channel.
++	const FName Speaker = Mission->GetActiveLineSpeaker();
++	FLinearColor SpeakerCol(1.f, 0.85f, 0.5f);
++	if (Speaker == FName(TEXT("Darya")))
++	{
++		SpeakerCol = FLinearColor(0.55f, 0.85f, 1.f);
++	}
++	else if (Speaker == FName(TEXT("Yas")))
++	{
++		SpeakerCol = FLinearColor(1.f, 1.f, 1.f);
++	}
++
++	float ProbeW = 0.f, LineH = 0.f;
++	GetTextSize(Lines[0], ProbeW, LineH, Font);
++	if (LineH <= 0.f)
++	{
++		LineH = 18.f;
++	}
++	const float Step = LineH + 4.f;
++
++	// Anchored above the controls hint and clear of the bottom-left bars.
++	const float BlockBottom = SH * 0.88f;
++	const float BlockTop = BlockBottom - Step * Lines.Num();
++	const float SpeakerY = BlockTop - Step;
++
++	// Scrim, or a bright marble wall eats the text.
++	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f * Alpha),
++		SW * 0.5f - SW * 0.34f, SpeakerY - 8.f,
++		SW * 0.68f, Step * (Lines.Num() + 1) + 14.f);
++
++	if (!Speaker.IsNone())
++	{
++		DrawCenteredLabel(Speaker.ToString().ToUpper(), SW * 0.5f, SpeakerY,
++			FLinearColor(SpeakerCol.R, SpeakerCol.G, SpeakerCol.B, Alpha), false);
++	}
++	for (int32 i = 0; i < Lines.Num(); ++i)
++	{
++		DrawCenteredLabel(Lines[i], SW * 0.5f, BlockTop + Step * i,
++			FLinearColor(0.96f, 0.96f, 0.96f, Alpha), true);
++	}
++}
++
+ AInteractableActor* AVeilHUD::FindActiveEavesdrop() const
+ {
+ 	UWorld* World = GetWorld();
+@@ -450,6 +541,9 @@ void AVeilHUD::DrawHUD()
+ 		}
+ 	}
+ 
++	// ----- Subtitles / dialogue lines (D7) -----
++	DrawSubtitles(Mission, SW, SH);
++
+ 	// ----- Version stamp (#95) -----
+ 	DrawLabel(TEXT("v0.9"), SW - 52.f, SH - 58.f, FLinearColor(0.5f, 0.5f, 0.55f, 0.6f), false);
+ 
+diff --git a/Source/VeilOfSuccession/VeilHUD.h b/Source/VeilOfSuccession/VeilHUD.h
+index a4f4bb9..d3d61c2 100644
+--- a/Source/VeilOfSuccession/VeilHUD.h
++++ b/Source/VeilOfSuccession/VeilHUD.h
+@@ -8,6 +8,7 @@
+ class ASpyCharacter;
+ class ABossCharacter;
+ class UMissionSubsystem;
++class UFont;
+ 
+ UCLASS()
+ class VEILOFSUCCESSION_API AVeilHUD : public AHUD
+@@ -28,6 +29,10 @@ private:
+ 	void DrawLabel(const FString& Text, float X, float Y, const FLinearColor& Color, bool bLarge);
+ 	void DrawCenteredLabel(const FString& Text, float CenterX, float Y, const FLinearColor& Color, bool bLarge);
+ 
++	// D7 subtitles: greedy word wrap, then a centred block above the hint line.
++	void WrapToWidth(const FString& Text, UFont* Font, float MaxWidth, TArray<FString>& OutLines);
++	void DrawSubtitles(UMissionSubsystem* Mission, float SW, float SH);
++
+ 	class AInteractableActor* FindActiveEavesdrop() const;
+ 
+ 	TWeakObjectPtr<ABossCharacter> CachedBoss;

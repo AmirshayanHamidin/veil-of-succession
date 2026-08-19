@@ -95,8 +95,12 @@ and pushes the updated agenda in the same commit as its results.
         existing checkpoints. → Docs/drafts/father_daughter_beats.md
 
 ### Code drafts (NEEDS-PC: build + screenshot verification in a live session)
-[~] Q7  D7 spec + patch: subtitle/dialogue-line system in MissionSubsystem
+[x] Q7  D7 spec + patch: subtitle/dialogue-line system in MissionSubsystem
         (data table of cues, on-screen text w/ timing). → Patches/subtitles.diff
+        (+ Patches/subtitles_TESTPLAN.md). NEEDS-PC: never compiled, never seen
+        running. Follow-ups it surfaced, for a later queue pass: wire the 16
+        P2 conditional cues + the RX_* reactive banks to real triggers, and
+        add the 60s/90s hint-ladder steps (they need a per-objective shape).
 [ ] Q8  E1 patch: USaveGame save/load (mission, weapons, health) + test plan.
         → Patches/savegame.diff
 [ ] Q9  E2 patch: distraction throwable (coin — noise event at impact point,
